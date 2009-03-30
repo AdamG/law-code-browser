@@ -70,8 +70,8 @@ class Section(models.Model):
     type = models.CharField(max_length=127, choices=choices.SECTION_TYPE_CHOICES)
     parent = models.ForeignKey('self', null=True)
     content = models.TextField(null=True, blank=True)
-    # 1-indexed, as it's used in combination with .type to generate a header
-    number = models.PositiveIntegerField()
+    # Can be a number, or a string: '101a'.
+    number = models.CharField(max_length=127)
 
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
