@@ -56,7 +56,6 @@ class Command(BaseCommand):
         self.opts = options
         self.load_us_code()
 
-
     def _load_us_code_title(self, title_file):
         """
         Load a single US code title file, run a regex over it, and
@@ -79,69 +78,48 @@ class Command(BaseCommand):
 
         http://en.wikipedia.org/wiki/United_States_Code#Organization
 
-        I originally planned to special-case the ordering, and then
-        handle promotion and drilling programmatically, however,
-        manually handling fifty Titles doesn't seem appealing.
-
-        Instead, I assume that there will always be more of each type
-        of subsection than their is of the parent section. For
-        example, each title will have only 1 Title, and, for example,
-        4 Chapters, and 30 Sections. The first part of this function
-        counts, in a dictionary, the number of each type of
-        subsection. It then orders them from the smallest number to
-        highest number, and creates the ``order`` variable which is
-        referenced later on.
-
-        We now enter the loop ``rx.finditer`` loop.
+        Since greater subtypes must always precede lower ones
 
         Determination of the Parent
         ===========================
 
-        Determining the parent makes use of the now-available
-        ``order`` variable. If the matched section type is
-        ``order[0]``, then .parent is None. (This should happen only
-        with Title, and I may special-case it to make sure this is the
-        case - haven't decided yet.)
-
-        Otherwise, I find the parent section type with
-        ``order[order.index(sectype)-1]``. I then look up into
-        ``parents[parent_section_type]``, and use that as
-        ``Section.parent``.
-
+        TODO: Rewrite
 
         """
         print "Starting %r" % title_file
 
         # See "Ordering Section Types"
         section_counts = {}
-        section_matches = us_section_rx.finditer(title_file.read())
-        for match in section_matches:
-            section = match.groups()[0].lower().strip()
-            try:
-                assert section in section_mapping, repr(section)
-            except AssertionError:
-                title_file.seek(0)
-                print title_file.read()[match.start()-400:match.end() + 400]
-                raise
+        section_match_groups = us_section_rx.findall(title_file.read())
+        for groups in section_match_groups:
+            section = groups[0].lower().strip()
+            assert section in section_mapping, repr(section)
             if section in section_counts:
                 section_counts[section] += 1
             else:
                 section_counts[section] = 1
+        # Special-case for (at least) Title 1.
+        if section_counts.get("chapter") == section_counts.get("title") == 1:
+            section_counts["chapter"] += 1
         swapped_tuples = [(t[1], t[0]) for t in section_counts.iteritems()]
         swapped_tuples.sort()
         # This is the final heirarchy order
         order = [t[1] for t in swapped_tuples]
 
+        print order
+
         parents = {}
         for sectype in order:
             parents[sectype] = None
-        print parents
-        print order
 
-        for match in section_matches:
-            sectype, number, name = match.groups()
+        prev_sectype = None
+        for groups in section_match_groups:
+            sectype, number, name = groups
             sectype = sectype.lower().strip()
-            number = int(number)
+            try:
+                number = int(number)
+            except ValueError:
+                pass
             name = name.rstrip("\r")
             assert sectype in section_mapping, sectype
             if order.index(sectype) == 0:
@@ -149,20 +127,22 @@ class Command(BaseCommand):
             else:
                 parent_section_type = order[order.index(sectype)-1]
                 parent = parents[parent_section_type]
-                assert parent is not None
+                assert parent is not None, parent_section_type
             type = section_mapping[sectype]
             if type is None:
                 continue
             kwargs = {
-                "code": us_code,
+                "code": self.us_code,
                 "name": name,
                 "number": number,
-                "type": type}
+                "type": type,
+                "parent": parent}
             if True:
-                print kwargs
+                parents[sectype] = kwargs
             else:
-                Section.objects.create(**kwargs)
-
+                sec = Section.objects.create(**kwargs)
+                parents[sectype] = sec
+            prev_sectype = sectype
     def load_us_code(self):
         self.us_code, created = Code.objects.get_or_create(
             name="US Code", type=Code.COUNTRY)
