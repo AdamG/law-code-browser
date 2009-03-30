@@ -76,18 +76,23 @@ class Command(BaseCommand):
         ===========================
 
         Determining the parent makes use of the now-available
-        ``order`` variable. For each match, I compare if the new
-        ``sectype`` with ``last_sectype``.
+        ``order`` variable. If the matched section type is
+        ``order[0]``, then .parent is None. (This should happen only
+        with Title, and I may special-case it to make sure this is the
+        case - haven't decided yet.)
+
+        Otherwise, I find the parent section type with
+        ``order[order.index(sectype)-1]``. I then look up into
+        ``parents[parent_section_type]``, and use that as
+        ``Section.parent``.
 
 
         """
 
-        # First, figure out what the ordering of this title is (they
-        # are *not* consistent) by counting the type of each
-        # section. The fewer there are of a section, the higher in the
-        # the section heirarchy they are.
+        # See "Ordering Section Types"
         section_counts = {}
-        for match in us_section_rx.finditer(title_file.read()):
+        section_matches = us_section_rx.find(title_file.read())
+        for match in section_matches:
             section = m.groups()[0].lower()
             assert section in section_mapping, section
             if section in section_counts:
@@ -99,48 +104,45 @@ class Command(BaseCommand):
         # This is the final heirarchy order
         order = [t[1] for t in swapped_tuples]
 
-        title_file.seek(0)
-
-        # Now I build a dictionary of the last parent of each type in
-        # ``order``. When a sectype promotion is found (see below), I
-        # look inside this dictionary to find what object to set as
-        # ``Section.parent``.
         parents = {}
         for sectype in order:
             parents[sectype] = None
 
-        # Now, we start inserting Section objects. In most cases, for
-        # example, a Section.SECTION following a Section.SECTION, we
-        # simply use 'parent'.  There are two special cases, which I
-        # will call "drill" and "promote". 
-        #
-        # Drilling
-
-        parent = None
-        previous_sectype = None
-        for match in us_section_rx.finditer(title_file.read()):
-            if previous_sectype
+        for match in section_matches:
             sectype, number, name = match.groups()
+            sectype = sectype.lower()
             number = int(number)
             name = name.rstrip("\r")
-            assert sectype.lower() in section_mapping, sectype
-            type = section_mapping[sectype.lower()]
+            assert sectype in section_mapping, sectype
+            if order.index(sectype) == 0:
+                parent = None
+            else:
+                parent_section_type = order[order.index(sectype)-1]
+                parent = parents[parent_section_type]
+                assert parent is not None
+            type = section_mapping[sectype]
             if type is None:
                 continue
-            Section.objects.create(
-                code=us_code,
-                name=name,
-                number=number,
-                type=type)
-            previous_sectype = sectype
+            kwargs = {
+                "code": us_code,
+                "name": name,
+                "number": number,
+                "type": type}
+            if True:
+                print kwargs
+            else:
+                Section.objects.create(**kwargs)
 
     def load_us_code(self):
         self.us_code, created = Code.objects.get_or_create(
             name="US Code", type=Code.COUNTRY)
         if self.opts.get("directory", False):
-            self.opts["directory"]
-
-
-
-
-
+            base_dir = os.path.abspath(self.opts["directory"])
+            name_fmt = "Title_%s.txt"
+            for ii in range(1, 51):
+                if ii < 10:
+                    str_ii = "0%d" % ii
+                else:
+                    str_ii = str(ii)
+                name = name_fmt % str_ii
+            self._load_us_code_title(file(os.path.join(base_dir, name)))
