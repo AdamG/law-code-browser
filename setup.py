@@ -1,19 +1,15 @@
-from distutils import setup, find_packages
+from distutils.core import setup
 
 setup(
     name='Law Code Browser',
-    version='0.0'
+    version='0.0.1a',
     description='A browser for law codes',
     author='Adam Gomaa',
     author_email='adam@adam.gomaa.us',
     maintainer='Adam Gomaa',
     maintainer_email='adam@adam.gomaa.us',
     url='http://github.com/AdamG/law-code-browser/',
-    packages=find_packages(),
-    include_package_data=True,
-    setup_requires=['setuptools_git'],
-    zip_safe=False,
-    entry_points={},
+    packages=['law_code_browser'],
     classifiers=[
         'Development Status :: 1 - Planning',
         'Environment :: Web Environment',
