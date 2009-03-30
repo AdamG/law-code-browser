@@ -50,4 +50,5 @@ SECTION_TYPE_CHOICES = Choices(
     ("subparagraph", "SUBPARAGRAPH", "Subparagraph"),
     ("clause", "CLAUSE", "Clause"),
     ("subclause", "SUBCLAUSE", "Subclause"),
+    ("division", "DIVISION", "Division"),
 )
