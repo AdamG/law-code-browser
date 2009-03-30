@@ -1,0 +1,24 @@
+{% extends "law_code/base.html" %}
+
+{% block body %}
+<h1><a href="{{ section.code.get_absolute_url }}">{{ section.code }}</a></h1>
+<ul>
+  {% for ancestor in section.get_ancestors %}
+  <li><a href="{{ ancestor.get_absolute_url }}">{{ ancestor }}</a></li>
+  {% endfor %}
+</ul>
+
+<div class="section">
+  <h2><a href="{{ section.get_absolute_url }}">{{ section }}</a></h2>
+{% if section.content %}<div class="section-content">{{ section.content }}</div>{% endif %}
+</div>
+{% for sub in section.get_descendants %}
+<div style="margin-left: {{ sub.level }}em;" class="section">
+  <h3><a href="{{ sub.get_absolute_url }}">{{ sub }}</a></h3>
+  {% if section.content %}<div class="section-content">{{ section.content }}</div>{% endif %}
+  
+</div>
+{% endfor %}
+
+{% endblock body %}
+

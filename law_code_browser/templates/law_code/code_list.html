@@ -1,0 +1,13 @@
+{% extends "law_code/base.html" %}
+
+{% block body %}
+
+
+{% for code in code_list %}
+<div class="code">
+  <h2><a href="{{ code.get_absolute_url }}">{{ code }}</a></h2>
+</div>
+{% endfor %}
+{% endblock body %}
+
+
