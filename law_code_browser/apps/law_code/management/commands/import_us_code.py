@@ -12,27 +12,49 @@ from django.core.management.base import BaseCommand, NoArgsCommand
 from law_code.models import Section, Code
 
 
-us_section_rx = re.compile("HEAD.*\n.*?\W*([\w ]+)?\.? (\w+)\.? (?:\- )?(.*?)\W*\n")
+us_section_rx = re.compile("""
+^\- HEAD \-# The header of each... well, header.
+.*\n # Get to the next line, when the content starts
+\W* # strip the leading whitespace
+([\w]+?) # The first group: part, section, title, etc
+(?:\-1)? # This is a special case for Title 42, Chapter 77, Subchaper
+         # III, Part A-1, which is inconsistently named, and should
+         # either be renamed B, or removed entirely.
+\.? # Sections are usually abbreviated "Sec." - so, ignore the period
+\W # Strop whitespace after the title
+([0-9]+[a-z]?) # Each section is ually a number with at most 1 suffix
+               # character, or a single character. This matches both.
+\.?# Section *numbers* usually have a trailing dot -  "2181."
+(?:\- )? # Larger sections (titles, etc) use SECTION X - THE TITLE
+\W+ # Force whitespace between section and title
+([\r\na-zA-Z ]+) # The title of the section
+\\r\\n\\r\\n # Two newlines end the title
+""", re.VERBOSE|re.MULTILINE)
+
 section_mapping = {
     "sec": Section.SECTION,
     "chapter": Section.CHAPTER,
     "title": Section.TITLE,
-    # Usually, eg, "secs 210 to 215: repealed"
-    "secs": None}
+    # Usually, eg, "secs 210 to 215: repealed". Exclude for now.
+    "secs": None,
+    "subchapter": Section.SUBCHAPTER,
+    "subpart": Section.SUBPART,
+    "part": Section.PART,
+    "division": Section.DIVISION,
+    }
 
 class Command(BaseCommand):
     help = 'Import a law code.'
     option_list = NoArgsCommand.option_list + (
-        make_option('--directory', action='store_true', dest='directory',
+        make_option('--directory', action='store', dest='directory',
                     help='Use downloaded files (Title_01.txt, etc) in this directory; '
                     'see http://uscode.house.gov/download/ascii.shtml\n'
                     'Otherwise, all the files are downloaded, which will take upwards of an hour.'),
     )
     args = "type(US)"
-    def handle(self, type, **options):
+    def handle(self, **options):
         self.opts = options
-        if type == "US":
-            self.load_us_code()
+        self.load_us_code()
 
 
     def _load_us_code_title(self, title_file):
@@ -88,13 +110,19 @@ class Command(BaseCommand):
 
 
         """
+        print "Starting %r" % title_file
 
         # See "Ordering Section Types"
         section_counts = {}
-        section_matches = us_section_rx.find(title_file.read())
+        section_matches = us_section_rx.finditer(title_file.read())
         for match in section_matches:
-            section = m.groups()[0].lower()
-            assert section in section_mapping, section
+            section = match.groups()[0].lower().strip()
+            try:
+                assert section in section_mapping, repr(section)
+            except AssertionError:
+                title_file.seek(0)
+                print title_file.read()[match.start()-400:match.end() + 400]
+                raise
             if section in section_counts:
                 section_counts[section] += 1
             else:
@@ -107,10 +135,12 @@ class Command(BaseCommand):
         parents = {}
         for sectype in order:
             parents[sectype] = None
+        print parents
+        print order
 
         for match in section_matches:
             sectype, number, name = match.groups()
-            sectype = sectype.lower()
+            sectype = sectype.lower().strip()
             number = int(number)
             name = name.rstrip("\r")
             assert sectype in section_mapping, sectype
@@ -137,7 +167,7 @@ class Command(BaseCommand):
         self.us_code, created = Code.objects.get_or_create(
             name="US Code", type=Code.COUNTRY)
         if self.opts.get("directory", False):
-            base_dir = os.path.abspath(self.opts["directory"])
+            base_dir = os.path.abspath(os.path.expanduser(self.opts["directory"]))
             name_fmt = "Title_%s.txt"
             for ii in range(1, 51):
                 if ii < 10:
@@ -145,4 +175,4 @@ class Command(BaseCommand):
                 else:
                     str_ii = str(ii)
                 name = name_fmt % str_ii
-            self._load_us_code_title(file(os.path.join(base_dir, name)))
+                self._load_us_code_title(file(os.path.join(base_dir, name)))
