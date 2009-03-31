@@ -8,6 +8,7 @@ import string
 import tempfile
 
 from django.core.management.base import BaseCommand, NoArgsCommand
+from django.db.transaction import commit_on_success
 
 from law_code.models import Section, Code
 
@@ -27,7 +28,7 @@ us_section_rx = re.compile("""
 \.?# Section *numbers* usually have a trailing dot -  "2181."
 (?:\- )? # Larger sections (titles, etc) use SECTION X - THE TITLE
 \W+ # Force whitespace between section and title
-([\r\na-zA-Z ]+) # The title of the section
+([\r\na-zA-Z,\(\) ]+) # The title of the section
 \\r\\n\\r\\n # Two newlines end the title
 """, re.VERBOSE|re.MULTILINE)
 
@@ -56,6 +57,7 @@ class Command(BaseCommand):
         self.opts = options
         self.load_us_code()
 
+    @commit_on_success
     def _load_us_code_title(self, title_file):
         """
         Load a single US code title file, run a regex over it, and
@@ -78,7 +80,9 @@ class Command(BaseCommand):
 
         http://en.wikipedia.org/wiki/United_States_Code#Organization
 
-        Since greater subtypes must always precede lower ones
+        Since greater subtypes must always precede lower ones, I
+        simply loop through all the sections, and add each new section
+        type if it hasn't yet been added to the ordering list.
 
         Determination of the Parent
         ===========================
@@ -87,47 +91,37 @@ class Command(BaseCommand):
 
         """
         print "Starting %r" % title_file
+        section_match_groups = us_section_rx.findall(title_file.read())
 
         # See "Ordering Section Types"
-        section_counts = {}
-        section_match_groups = us_section_rx.findall(title_file.read())
+        order = []
         for groups in section_match_groups:
             section = groups[0].lower().strip()
-            assert section in section_mapping, repr(section)
-            if section in section_counts:
-                section_counts[section] += 1
-            else:
-                section_counts[section] = 1
-        # Special-case for (at least) Title 1.
-        if section_counts.get("chapter") == section_counts.get("title") == 1:
-            section_counts["chapter"] += 1
-        swapped_tuples = [(t[1], t[0]) for t in section_counts.iteritems()]
-        swapped_tuples.sort()
-        # This is the final heirarchy order
-        order = [t[1] for t in swapped_tuples]
-
+            if section not in order:
+                order.append(section)
         print order
 
         parents = {}
         for sectype in order:
             parents[sectype] = None
 
-        prev_sectype = None
         for groups in section_match_groups:
+
             sectype, number, name = groups
             sectype = sectype.lower().strip()
-            try:
-                number = int(number)
-            except ValueError:
-                pass
+
+            # Clear out child types, so they aren't seen as potential parents.
+            child_types = order[order.index(sectype):]
+            for ct in child_types:
+                parents[ct] = None
+            parent = None
+            potential_parent_types = order[:order.index(sectype)]
+            for ppt in potential_parent_types:
+                if parents[ppt] is not None:
+                    parent = parents[ppt]
+
             name = name.rstrip("\r")
             assert sectype in section_mapping, sectype
-            if order.index(sectype) == 0:
-                parent = None
-            else:
-                parent_section_type = order[order.index(sectype)-1]
-                parent = parents[parent_section_type]
-                assert parent is not None, parent_section_type
             type = section_mapping[sectype]
             if type is None:
                 continue
@@ -137,12 +131,12 @@ class Command(BaseCommand):
                 "number": number,
                 "type": type,
                 "parent": parent}
-            if True:
+            if False:
                 parents[sectype] = kwargs
             else:
                 sec = Section.objects.create(**kwargs)
                 parents[sectype] = sec
-            prev_sectype = sectype
+
     def load_us_code(self):
         self.us_code, created = Code.objects.get_or_create(
             name="US Code", type=Code.COUNTRY)
