@@ -128,7 +128,7 @@ class Command(BaseCommand):
                 # Stop after Title 1 for the time being.
                 assert False
 
-def determine_order(groups):
+def determine_order(groups_list):
     """
     Ordering Section Types
     ======================
@@ -147,7 +147,7 @@ def determine_order(groups):
 
     """
     order = []
-    for groups in groups:
+    for groups in groups_list:
         section = groups[0].lower().strip()
         if section not in order:
             order.append(section)
