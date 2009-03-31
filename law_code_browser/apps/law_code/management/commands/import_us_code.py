@@ -63,27 +63,6 @@ class Command(BaseCommand):
         Load a single US code title file, run a regex over it, and
         build Section objects out of it.
 
-        The execution of this function is broken into two sections:
-        Heuristic ordering of section types, determination of a
-        promotion, sibling, or drill Section addition, and then
-        creation of the Section object.
-
-        Ordering Section Types
-        ======================
-
-        The US code does not use consistent ordering. This is just one
-        of many beautiful features that makes it a write-only
-        document. The Title is the uppermost division, while the
-        Section is always, AFAIK, the smallest division. However, the
-        divisions bewtween Title and Section do not use consistent
-        ordering:
-
-        http://en.wikipedia.org/wiki/United_States_Code#Organization
-
-        Since greater subtypes must always precede lower ones, I
-        simply loop through all the sections, and add each new section
-        type if it hasn't yet been added to the ordering list.
-
         Determination of the Parent
         ===========================
 
@@ -94,11 +73,7 @@ class Command(BaseCommand):
         section_match_groups = us_section_rx.findall(title_file.read())
 
         # See "Ordering Section Types"
-        order = []
-        for groups in section_match_groups:
-            section = groups[0].lower().strip()
-            if section not in order:
-                order.append(section)
+        order = determine_order(section_match_groups)
         print order
 
         parents = {}
@@ -130,7 +105,7 @@ class Command(BaseCommand):
                 "name": name,
                 "number": number,
                 "type": type,
-                "parent": parent}
+                "parent": parent,}
             if False:
                 parents[sectype] = kwargs
             else:
@@ -150,3 +125,30 @@ class Command(BaseCommand):
                     str_ii = str(ii)
                 name = name_fmt % str_ii
                 self._load_us_code_title(file(os.path.join(base_dir, name)))
+                # Stop after Title 1 for the time being.
+                assert False
+
+def determine_order(groups):
+    """
+    Ordering Section Types
+    ======================
+
+    The US code does not use consistent ordering. This is just one of
+    many beautiful features that makes it a write-only document. The
+    Title is the uppermost division, while the Section is always,
+    AFAIK, the smallest division. However, the divisions bewtween
+    Title and Section do not use consistent ordering:
+
+    http://en.wikipedia.org/wiki/United_States_Code#Organization
+
+    Since greater subtypes must always precede lower ones, I simply
+    loop through all the sections, and add each new section type if it
+    hasn't yet been added to the ordering list.
+
+    """
+    order = []
+    for groups in groups:
+        section = groups[0].lower().strip()
+        if section not in order:
+            order.append(section)
+    return order
