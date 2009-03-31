@@ -24,13 +24,13 @@ def view_section(request, code_id, section_string):
     section_parts = section_string.split('/')
     if not section_parts:
         raise Http404("No section segment found")
-    root_section_number = int(section_parts.pop(0))
+    root_section_number = section_parts.pop(0)
     root_section = get_object_or_404(code.sections.filter(parent=None), current_version=True, number=root_section_number)
     parent = root_section
     if not section_parts:
         node = root_section
     for part in section_parts:
-        node = parent.get_children().get(number=int(part))
+        node = parent.get_children().get(number=part)
         parent = node
 
     return direct_to_template(
